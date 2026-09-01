@@ -1,10 +1,10 @@
 {
-  "created_at_utc": "2026-09-01T14:09:56.283881+00:00",
+  "created_at_utc": "2026-09-01T19:25:57.651554+00:00",
   "status": "promoted_with_documented_gaps",
   "tables": {
     "pit_receipts": {
-      "rows": 80,
-      "coverage_start": "2025-12-31T00:00:00",
+      "rows": 122,
+      "coverage_start": "2025-03-31T00:00:00",
       "coverage_end": "2026-04-01T00:00:00"
     },
     "industrial_production": {
@@ -23,19 +23,19 @@
       "coverage_end": null
     },
     "sources": {
-      "rows": 12,
+      "rows": 13,
       "coverage_start": "2022-09-30T00:00:00",
       "coverage_end": "2026-07-31T00:00:00"
     },
     "quality_events": {
-      "rows": 83,
+      "rows": 84,
       "coverage_start": "2023-03-31T00:00:00",
       "coverage_end": "2026-06-30T00:00:00"
     }
   },
   "validation": {
-    "passed": 77,
-    "warnings": 6,
+    "passed": 79,
+    "warnings": 5,
     "blocking": 0
   },
   "diagnostics": {
@@ -93,18 +93,17 @@
       "data-20240901-structure-20240901.csv: missing structure-20240901.csv",
       "data-20241001-structure-20241001.csv: missing structure-20241001.csv",
       "data-20241101-structure-20241101.csv: missing structure-20241101.csv",
-      "data-20241201-structure-20241201 (1).csv: missing structure-20241201.csv",
       "data-20241201-structure-20241201.csv: missing structure-20241201.csv",
-      "data-20241216-structure-20241101 (1).csv: missing structure-20241101.csv",
+      "data-20241201-structure-20241201 (1).csv: missing structure-20241201.csv",
       "data-20241216-structure-20241101.csv: missing structure-20241101.csv",
-      "data-20250101-structure-20250101 (1).csv: missing structure-20250101.csv",
+      "data-20241216-structure-20241101 (1).csv: missing structure-20241101.csv",
       "data-20250101-structure-20250101.csv: missing structure-20250101.csv",
-      "data-20250401-structure-20250401 (1).csv: missing structure-20250401.csv",
-      "data-20250401-structure-20250401.csv: missing structure-20250401.csv",
-      "data-20250701-structure-20250701 (1).csv: missing structure-20250701.csv",
+      "data-20250101-structure-20250101 (1).csv: missing structure-20250101.csv",
+      "data-20250401-structure-20250401 (1).csv: duplicate content",
       "data-20250701-structure-20250701.csv: missing structure-20250701.csv",
-      "data-20251001-structure-20251001 (1).csv: missing structure-20251001.csv",
-      "data-20251001-structure-20251001.csv: missing structure-20251001.csv"
+      "data-20250701-structure-20250701 (1).csv: missing structure-20250701.csv",
+      "data-20251001-structure-20251001.csv: missing structure-20251001.csv",
+      "data-20251001-structure-20251001 (1).csv: missing structure-20251001.csv"
     ],
     "rosstat_skipped": [
       "ind_sub_2015-2025.xlsx: annual/non-monthly workbook",
@@ -119,6 +118,7 @@
       "KBSRF-na-01.07.2025.zip",
       "КБСРФ на 01.04.2026.zip",
       "КБСРФ на 01.07.2026.zip"
-    ]
+    ],
+    "refresh_mode": "incremental FNS refresh; unchanged promoted Rosstat and Treasury tables retained"
   }
 }

@@ -59,6 +59,16 @@ def _delimiter(path: Path) -> str:
     return ";" if first_line.count(";") > first_line.count(",") else ","
 
 
+def _data_path_sort_key(path: Path) -> tuple[str, str, int, str]:
+    """Prefer the canonical filename before browser-created numbered copies."""
+
+    match = DATA_PATTERN.match(path.name)
+    if match is None:
+        return ("", "", 2, path.name)
+    is_numbered_copy = int(bool(re.search(r" \(\d+\)\.csv$", path.name)))
+    return (match.group("release"), match.group("schema"), is_numbered_copy, path.name)
+
+
 def _normalise_section(token: str) -> str:
     token = CYRILLIC_SECTION.get(token.upper(), token.upper())
     return token if token in set("ABCDEFGHIJKLMNOPQRS") else token
@@ -129,10 +139,11 @@ def ingest_fns_result(
     skipped: list[str] = []
     seen_hashes: set[str] = set()
 
-    for path in sorted(root.glob("data-*-structure-*.csv")):
+    for path in sorted(root.glob("data-*-structure-*.csv"), key=_data_path_sort_key):
         match = DATA_PATTERN.match(path.name)
         if not match:
-            skipped.append(f"{path.name}: filename not recognized")
+            # Browser-created "copy" files are duplicate local artifacts, not
+            # distinct official releases and should not inflate coverage gaps.
             continue
         schema_path = root / f"structure-{match.group('schema')}.csv"
         if not schema_path.exists():

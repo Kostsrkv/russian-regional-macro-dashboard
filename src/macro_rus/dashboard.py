@@ -6,6 +6,7 @@ does not read raw source files: only a promoted vintage can reach the UI.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -19,6 +20,19 @@ INK = "#182230"
 MUTED = "#5D6978"
 GRID = "#D9DEE7"
 LIGHT_BLUE = "#DCE7F7"
+
+INDUSTRIAL_SECTION_NAMES = {
+    "B": "Mining and quarrying",
+    "C": "Manufacturing",
+    "D": "Electricity, gas and steam",
+    "E": "Water, sewerage and waste",
+}
+
+DATASET_LABELS = {
+    "pit_receipts": "PIT",
+    "industrial_production": "Industrial production",
+    "budget_execution": "Fiscal execution",
+}
 
 
 @dataclass
@@ -171,7 +185,15 @@ def industry_snapshot(frame: Any | None) -> Any:
 
     import pandas as pd
 
-    columns = ["industry", "industry_ru", "okved_section", "pit_rub", "share_pct", "change_rub"]
+    columns = [
+        "industry",
+        "industry_ru",
+        "okved_section",
+        "pit_rub",
+        "share_pct",
+        "change_rub",
+        "yoy_pct",
+    ]
     if frame is None or frame.empty or "period" not in frame.columns:
         return pd.DataFrame(columns=columns)
     measure = "pit_flow_rub" if "pit_flow_rub" in frame.columns else "pit_ytd_rub"
@@ -197,11 +219,14 @@ def industry_snapshot(frame: Any | None) -> Any:
     denominator = current["pit_rub"].sum(min_count=1)
     current["share_pct"] = current["pit_rub"] / denominator * 100 if denominator else pd.NA
     prior_period = current_period - pd.DateOffset(years=1)
-    prior = totals.loc[totals["period"] == prior_period, ["industry", measure]].rename(
+    prior = totals.loc[totals["period"] == prior_period, ["okved_section", measure]].rename(
         columns={measure: "prior_rub"}
     )
-    current = current.merge(prior, on="industry", how="left")
+    current = current.merge(prior, on="okved_section", how="left")
     current["change_rub"] = current["pit_rub"] - current["prior_rub"]
+    current["yoy_pct"] = (
+        (current["pit_rub"] / current["prior_rub"] - 1) * 100
+    ).where(current["prior_rub"] > 0)
     return current[columns].sort_values("pit_rub", ascending=False, na_position="last").reset_index(drop=True)
 
 
@@ -245,6 +270,87 @@ def industrial_snapshot(frame: Any | None) -> dict[str, Any]:
         }
     )
     return result
+
+
+def cross_check_snapshot(pit_frame: Any | None, industrial_frame: Any | None) -> dict[str, Any]:
+    """Align industry PIT with the production observation at the PIT cutoff.
+
+    PIT is a quarterly flow while the available Rosstat series is a monthly
+    same-month-prior-year index. The function aligns their cutoff date but
+    preserves those different comparison windows for explicit UI labelling.
+    """
+
+    import pandas as pd
+
+    empty = {
+        "pit_period": None,
+        "pit_prior_period": None,
+        "production_period": None,
+        "production_measure": "",
+        "data": pd.DataFrame(),
+    }
+    if pit_frame is None or industrial_frame is None or pit_frame.empty or industrial_frame.empty:
+        return empty
+
+    measure = "pit_flow_rub" if "pit_flow_rub" in pit_frame.columns else "pit_ytd_rub"
+    if measure not in pit_frame.columns:
+        return empty
+    pit_work = _exclude_pit_total_rows(pit_frame.copy())
+    pit_work[measure] = pd.to_numeric(pit_work[measure], errors="coerce")
+    pit_work["period"] = pd.to_datetime(pit_work["period"], errors="coerce")
+    pit_work = pit_work.dropna(subset=["period", measure])
+    if pit_work.empty:
+        return empty
+    pit_period = pit_work["period"].max()
+    pit_snapshot = industry_snapshot(pit_work)
+
+    production = industrial_frame.copy()
+    production["period"] = pd.to_datetime(production["period"], errors="coerce")
+    production["index_value"] = pd.to_numeric(production["index_value"], errors="coerce")
+    production = production.loc[
+        production["period"].eq(pit_period)
+        & production["okved_section"].isin(["B", "C", "D", "E"])
+    ].dropna(subset=["index_value"])
+    if production.empty:
+        return {
+            **empty,
+            "pit_period": pit_period,
+            "pit_prior_period": pit_period - pd.DateOffset(years=1),
+        }
+
+    production = production.sort_values(["okved_section", "source_vintage"], kind="stable")
+    production = production.drop_duplicates("okved_section", keep="last")
+    production["industry"] = _series_first_nonempty(
+        production,
+        ("industry_name_en", "industry_name_ru", "okved_section"),
+        "Unmapped",
+    )
+    pit_sector = (
+        pit_snapshot.loc[pit_snapshot["okved_section"].isin(["B", "C", "D", "E"])]
+        .groupby("okved_section", as_index=False)[["pit_rub", "change_rub", "yoy_pct"]]
+        .sum(min_count=1)
+        .rename(
+            columns={
+                "pit_rub": "pit_current_rub",
+                "change_rub": "pit_change_rub",
+                "yoy_pct": "pit_yoy_pct",
+            }
+        )
+    )
+    joined = production[
+        ["industry", "okved_section", "index_measure", "index_value"]
+    ].merge(pit_sector, on="okved_section", how="outer")
+    joined["industry"] = joined["industry"].fillna(
+        joined["okved_section"].map(INDUSTRIAL_SECTION_NAMES)
+    )
+    joined = joined.sort_values("okved_section", kind="stable").reset_index(drop=True)
+    return {
+        "pit_period": pit_period,
+        "pit_prior_period": pit_period - pd.DateOffset(years=1),
+        "production_period": pit_period,
+        "production_measure": _first_text(production, "index_measure"),
+        "data": joined,
+    }
 
 
 def classify_revenue(row: Mapping[str, Any]) -> str | None:
@@ -317,7 +423,7 @@ def fiscal_snapshot(frame: Any | None) -> Any:
 def source_summary(bundle: DataBundle, region_id: str, table_names: Iterable[str]) -> dict[str, str]:
     """Build compact metadata that is visible on every analytical page."""
 
-    periods: list[Any] = []
+    period_labels: list[str] = []
     vintages: set[str] = set()
     source_ids: set[str] = set()
     for table_name in table_names:
@@ -326,11 +432,16 @@ def source_summary(bundle: DataBundle, region_id: str, table_names: Iterable[str
             continue
         period = latest_period(frame)
         if period is not None:
-            periods.append(period)
-        if "source_vintage" in frame.columns:
-            vintages.update(_nonempty_strings(frame["source_vintage"].tolist()))
-        if "source_id" in frame.columns:
-            source_ids.update(_nonempty_strings(frame["source_id"].tolist()))
+            period_labels.append(
+                f"{DATASET_LABELS.get(table_name, table_name)}: {period.strftime('%d %b %Y')}"
+            )
+            latest = frame.loc[frame["period"].eq(period)] if "period" in frame.columns else frame
+        else:
+            latest = frame
+        if "source_vintage" in latest.columns:
+            vintages.update(_nonempty_strings(latest["source_vintage"].tolist()))
+        if "source_id" in latest.columns:
+            source_ids.update(_nonempty_strings(latest["source_id"].tolist()))
     publishers: set[str] = set()
     sources = bundle.get("sources")
     units: set[str] = set()
@@ -341,7 +452,7 @@ def source_summary(bundle: DataBundle, region_id: str, table_names: Iterable[str
         if "units" in selected.columns:
             units.update(_nonempty_strings(selected["units"].tolist()))
     return {
-        "latest": max(periods).strftime("%d %b %Y") if periods else "Not available",
+        "periods": " · ".join(period_labels) or "Not available",
         "sources": ", ".join(sorted(publishers or source_ids)) or "Not available",
         "vintages": ", ".join(sorted(vintages)) or "Not available",
         "units": ", ".join(sorted(units)) or _default_units(table_names),
@@ -573,68 +684,139 @@ def _render_fiscal(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> Non
 
 
 def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> None:
-    import pandas as pd
-
     metadata = source_summary(bundle, region_id, ("pit_receipts", "industrial_production"))
     _render_metadata(st, metadata)
-    pit = industry_snapshot(filter_region(bundle.get("pit_receipts"), region_id))
-    industrial = industrial_snapshot(filter_region(bundle.get("industrial_production"), region_id))["sectors"]
-    if pit.empty or industrial is None or industrial.empty:
-        st.info("Both mapped PIT and industrial-production sections B–E are required for this cross-check.")
-        return
-    pit_sector = (
-        pit.loc[pit["okved_section"].isin(["B", "C", "D", "E"])]
-        .groupby("okved_section", as_index=False)
-        .agg(pit_change_rub=("change_rub", "sum"))
+    snapshot = cross_check_snapshot(
+        filter_region(bundle.get("pit_receipts"), region_id),
+        filter_region(bundle.get("industrial_production"), region_id),
     )
-    joined = industrial.merge(pit_sector, on="okved_section", how="outer")
+    joined = snapshot["data"]
     if joined.empty:
-        st.info("The PIT and production perimeters do not contain matching OKVED2 sections B–E.")
+        if snapshot["pit_period"] is not None:
+            st.info(
+                "No Rosstat monthly production observation matches the latest PIT cutoff "
+                f"({_format_period(snapshot['pit_period'])}). The cross-check is withheld rather than "
+                "combining unmatched periods."
+            )
+        else:
+            st.info("Both mapped PIT and industrial-production sections B–E are required for this cross-check.")
         return
+
     st.subheader("PIT and production signals by matching industrial section")
-    st.caption("The measures are shown side by side, not merged into a composite score.")
-    display = joined.rename(
+    st.caption(
+        f"PIT: quarter ending {_format_period(snapshot['pit_period'])} versus the same quarter one year earlier. "
+        f"Production: {_format_period(snapshot['production_period'])} versus the same month one year earlier. "
+        "The measures are kept separate and are not combined into a score."
+    )
+
+    production_plot = joined.dropna(subset=["index_value"]).copy()
+    if not production_plot.empty:
+        production_plot["value_label"] = production_plot["index_value"].map(lambda value: f"{value:.1f}")
+        lower = min(85.0, float(production_plot["index_value"].min()) - 4)
+        upper = max(105.0, float(production_plot["index_value"].max()) + 4)
+        base = alt.Chart(production_plot).encode(
+            y=alt.Y(
+                "industry:N",
+                sort=list(INDUSTRIAL_SECTION_NAMES.values()),
+                title=None,
+                axis=alt.Axis(labelLimit=220, labelOverlap=False),
+            ),
+            x=alt.X(
+                "index_value:Q",
+                title="Production index (same month previous year = 100)",
+                scale=alt.Scale(domain=[lower, upper], zero=False),
+                axis=alt.Axis(tickCount=7),
+            ),
+            tooltip=[
+                alt.Tooltip("industry:N", title="Industry"),
+                alt.Tooltip("okved_section:N", title="OKVED2"),
+                alt.Tooltip("index_value:Q", title="Production index", format=".1f"),
+            ],
+        )
+        reference = (
+            alt.Chart({"values": [{"benchmark": 100}]})
+            .mark_rule(color=INK, strokeDash=[5, 4], strokeWidth=1.5)
+            .encode(x="benchmark:Q")
+        )
+        points = base.mark_point(filled=True, color=BLUE, size=110, stroke="#163B75")
+        labels = base.mark_text(align="left", dx=8, color=INK).encode(text="value_label:N")
+        chart = (reference + points + labels).properties(
+            height=220,
+            title=alt.Title(
+                "Industrial production",
+                subtitle=f"{_format_period(snapshot['production_period'])}; 100 = unchanged from the same month one year earlier",
+            ),
+            description="A dot plot compares production indices with the no-change benchmark of 100.",
+        )
+        st.altair_chart(chart, width="stretch")
+
+    pit_plot = joined.dropna(subset=["pit_yoy_pct"]).copy()
+    missing_pit_sections = joined.loc[joined["pit_yoy_pct"].isna(), "okved_section"].dropna().tolist()
+    if missing_pit_sections and not pit_plot.empty:
+        st.warning(
+            "PIT comparison is unavailable for OKVED2 "
+            f"{', '.join(missing_pit_sections)} in the current FNS release. "
+            "Those observations remain explicitly missing and are omitted from the PIT chart."
+        )
+    if pit_plot.empty:
+        st.info(
+            "PIT year-on-year comparison is unavailable because a matching prior-year FNS observation "
+            "has not been ingested. Missing values are not displayed as zero."
+        )
+    else:
+        pit_plot["direction"] = pit_plot["pit_yoy_pct"].map(
+            lambda value: "Increase" if value >= 0 else "Decrease"
+        )
+        pit_plot["value_label"] = pit_plot["pit_yoy_pct"].map(lambda value: f"{value:+.1f}%")
+        base = alt.Chart(pit_plot).encode(
+            y=alt.Y(
+                "industry:N",
+                sort=list(INDUSTRIAL_SECTION_NAMES.values()),
+                title=None,
+                axis=alt.Axis(labelLimit=220, labelOverlap=False),
+            ),
+            x=alt.X("pit_yoy_pct:Q", title="Nominal PIT growth (%)", axis=alt.Axis(tickCount=7)),
+            tooltip=[
+                alt.Tooltip("industry:N", title="Industry"),
+                alt.Tooltip("okved_section:N", title="OKVED2"),
+                alt.Tooltip("pit_yoy_pct:Q", title="Nominal PIT growth", format="+.1f"),
+                alt.Tooltip("pit_change_rub:Q", title="PIT change (RUB)", format="+,.0f"),
+            ],
+        )
+        bars = base.mark_bar(stroke=INK).encode(
+            color=alt.Color(
+                "direction:N",
+                scale=alt.Scale(domain=["Increase", "Decrease"], range=[BLUE, ORANGE]),
+                legend=None,
+            )
+        )
+        zero = alt.Chart({"values": [{"zero": 0}]}).mark_rule(color=INK).encode(x="zero:Q")
+        labels = base.mark_text(align="left", dx=5, color=INK).encode(text="value_label:N")
+        chart = (bars + zero + labels).properties(
+            height=220,
+            title=alt.Title(
+                "Industry-attributed PIT receipts",
+                subtitle=f"Nominal quarterly flow; {_format_period(snapshot['pit_period'])} versus {_format_period(snapshot['pit_prior_period'])}",
+            ),
+            description="Signed horizontal bars show nominal PIT growth by industrial section.",
+        )
+        st.altair_chart(chart, width="stretch")
+
+    display = joined[["industry", "okved_section", "index_value", "pit_yoy_pct", "pit_change_rub"]].copy()
+    display["index_value"] = display["index_value"].map(_format_index)
+    display["pit_yoy_pct"] = display["pit_yoy_pct"].map(_format_pct)
+    display["pit_change_rub"] = display["pit_change_rub"].map(_format_rub)
+    display = display.rename(
         columns={
             "industry": "Industry",
             "okved_section": "OKVED2 section",
             "index_value": "Production index",
-            "pit_change_rub": "PIT same-period YoY change (RUB)",
+            "pit_yoy_pct": "Nominal PIT YoY",
+            "pit_change_rub": "PIT change",
         }
     )
-    st.dataframe(display, hide_index=True, width="stretch")
-
-    long = joined.melt(
-        id_vars=["okved_section"],
-        value_vars=[column for column in ("index_value", "pit_change_rub") if column in joined.columns],
-        var_name="measure",
-        value_name="value",
-    ).dropna(subset=["value"])
-    long["measure"] = long["measure"].map(
-        {"index_value": "Production index", "pit_change_rub": "PIT change (RUB)"}
-    )
-    # Separate scales avoid implying that RUB changes and an index are directly comparable.
-    if not long.empty:
-        chart = (
-            alt.Chart(long)
-            .mark_bar(color=BLUE, stroke="#163B75")
-            .encode(
-                x=alt.X("okved_section:N", title="OKVED2 section"),
-                y=alt.Y("value:Q", title=None),
-                tooltip=[
-                    alt.Tooltip("okved_section:N", title="OKVED2"),
-                    alt.Tooltip("measure:N", title="Measure"),
-                    alt.Tooltip("value:Q", title="Value", format=",.1f"),
-                ],
-            )
-            .properties(width=260, height=230)
-            .facet(column=alt.Column("measure:N", title=None))
-            .resolve_scale(y="independent")
-            .properties(
-                title=alt.Title("Industrial cross-check", subtitle="Separate scales; matching sections B–E only"),
-                description="Faceted bars preserve separate scales for PIT change and production indices.",
-            )
-        )
-        st.altair_chart(chart, width="content")
+    with st.expander("Accessible data table"):
+        st.dataframe(display, hide_index=True, width="stretch")
     st.info(
         "Divergence is not necessarily contradictory: wage inflation, bonuses, labour scarcity, tax timing, and classification changes can move PIT independently of physical output."
     )
@@ -761,7 +943,7 @@ def _signed_bar_chart(alt: Any, frame: Any, category: str, value: str, title: st
 
 def _render_metadata(st: Any, metadata: Mapping[str, str]) -> None:
     st.caption(
-        f"Latest complete period: **{metadata['latest']}** · Units: **{metadata['units']}**  \n"
+        f"Latest source observations: **{metadata['periods']}** · Units: **{metadata['units']}**  \n"
         f"Source: **{metadata['sources']}** · Vintage: **{metadata['vintages']}**"
     )
 
@@ -884,6 +1066,8 @@ def _format_rub(value: Any) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return "Not available"
+    if not math.isfinite(number):
+        return "Not available"
     absolute = abs(number)
     if absolute >= 1_000_000_000:
         return f"RUB {number / 1_000_000_000:,.1f}bn"
@@ -906,24 +1090,27 @@ def _format_pct(value: Any) -> str:
     if value is None:
         return "Not available"
     try:
-        return f"{float(value):.1f}%"
+        number = float(value)
     except (TypeError, ValueError):
         return "Not available"
+    return f"{number:.1f}%" if math.isfinite(number) else "Not available"
 
 
 def _format_delta(value: Any, suffix: str) -> str | None:
     if value is None:
         return None
     try:
-        return f"{float(value):+.1f}% {suffix}"
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    return f"{number:+.1f}% {suffix}" if math.isfinite(number) else None
 
 
 def _format_index(value: Any) -> str:
     if value is None:
         return "Not available"
     try:
-        return f"{float(value):.1f}"
+        number = float(value)
     except (TypeError, ValueError):
         return "Not available"
+    return f"{number:.1f}" if math.isfinite(number) else "Not available"
