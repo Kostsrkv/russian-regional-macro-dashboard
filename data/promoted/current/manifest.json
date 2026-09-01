@@ -1,0 +1,124 @@
+{
+  "created_at_utc": "2026-09-01T14:09:56.283881+00:00",
+  "status": "promoted_with_documented_gaps",
+  "tables": {
+    "pit_receipts": {
+      "rows": 80,
+      "coverage_start": "2025-12-31T00:00:00",
+      "coverage_end": "2026-04-01T00:00:00"
+    },
+    "industrial_production": {
+      "rows": 1390,
+      "coverage_start": "2015-01-31T00:00:00",
+      "coverage_end": "2026-07-31T00:00:00"
+    },
+    "budget_execution": {
+      "rows": 80,
+      "coverage_start": "2023-03-31T00:00:00",
+      "coverage_end": "2026-06-30T00:00:00"
+    },
+    "regions": {
+      "rows": 2,
+      "coverage_start": null,
+      "coverage_end": null
+    },
+    "sources": {
+      "rows": 12,
+      "coverage_start": "2022-09-30T00:00:00",
+      "coverage_end": "2026-07-31T00:00:00"
+    },
+    "quality_events": {
+      "rows": 83,
+      "coverage_start": "2023-03-31T00:00:00",
+      "coverage_end": "2026-06-30T00:00:00"
+    }
+  },
+  "validation": {
+    "passed": 77,
+    "warnings": 6,
+    "blocking": 0
+  },
+  "diagnostics": {
+    "fns_skipped": [
+      "data-20180101-structure-20180101.csv: missing structure-20180101.csv",
+      "data-20190101-structure-20190101.csv: missing structure-20190101.csv",
+      "data-20190401-structure-20190401.csv: missing structure-20190401.csv",
+      "data-20190701-structure-20190701.csv: missing structure-20190701.csv",
+      "data-20200101-structure-20200101.csv: missing structure-20200101.csv",
+      "data-20200201-structure-20200201.csv: missing structure-20200201.csv",
+      "data-20200401-structure-20200401.csv: missing structure-20200401.csv",
+      "data-20200501-structure-20200501.csv: missing structure-20200501.csv",
+      "data-20200701-structure-20200701.csv: missing structure-20200701.csv",
+      "data-20200801-structure-20200801.csv: missing structure-20200801.csv",
+      "data-20200901-structure-20200901.csv: missing structure-20200901.csv",
+      "data-20201001-structure-20201001.csv: missing structure-20201001.csv",
+      "data-20201101-structure-20201101.csv: missing structure-20201101.csv",
+      "data-20210101-structure-20210101.csv: missing structure-20210101.csv",
+      "data-20210201-structure-20210201.csv: missing structure-20210201.csv",
+      "data-20210401-structure-20210401.csv: missing structure-20210401.csv",
+      "data-20210501-structure-20210501.csv: missing structure-20210501.csv",
+      "data-20210601-structure-20210601.csv: missing structure-20210601.csv",
+      "data-20210901-structure-20210901.csv: missing structure-20210901.csv",
+      "data-20211001-structure-20211001.csv: missing structure-20211001.csv",
+      "data-20211101-structure-20211101.csv: missing structure-20211101.csv",
+      "data-20211201-structure-20211201.csv: missing structure-20211201.csv",
+      "data-20220101-structure-20220101.csv: missing structure-20220101.csv",
+      "data-20220201-structure-20220201.csv: missing structure-20220201.csv",
+      "data-20220301-structure-20220301.csv: missing structure-20220301.csv",
+      "data-20220401-structure-20220401.csv: missing structure-20220401.csv",
+      "data-20220501-structure-20220501.csv: missing structure-20220501.csv",
+      "data-20220601-structure-20220601.csv: missing structure-20220601.csv",
+      "data-20220701-structure-20220701.csv: missing structure-20220701.csv",
+      "data-20220801-structure-20220801.csv: missing structure-20220801.csv",
+      "data-20220901-structure-20220901.csv: missing structure-20220901.csv",
+      "data-20221001-structure-20221001.csv: missing structure-20221001.csv",
+      "data-20221101-structure-20221101.csv: missing structure-20221101.csv",
+      "data-20221201-structure-20221201.csv: missing structure-20221201.csv",
+      "data-20230101-structure-20230101.csv: missing structure-20230101.csv",
+      "data-20230401-structure-20230401.csv: missing structure-20230401.csv",
+      "data-20230501-structure-20230501.csv: missing structure-20230501.csv",
+      "data-20230601-structure-20230601.csv: missing structure-20230601.csv",
+      "data-20230701-structure-20230701.csv: missing structure-20230701.csv",
+      "data-20230801-structure-20230801.csv: missing structure-20230801.csv",
+      "data-20230901-structure-20230901.csv: missing structure-20230901.csv",
+      "data-20231001-structure-20231001.csv: missing structure-20231001.csv",
+      "data-20231101-structure-20231101.csv: missing structure-20231101.csv",
+      "data-20231201-structure-20231201.csv: missing structure-20231201.csv",
+      "data-20240101-structure-20240101.csv: missing structure-20240101.csv",
+      "data-20240401-structure-20240401.csv: missing structure-20240401.csv",
+      "data-20240501-structure-20240501.csv: missing structure-20240501.csv",
+      "data-20240601-structure-20240601.csv: missing structure-20240601.csv",
+      "data-20240701-structure-20240701.csv: missing structure-20240701.csv",
+      "data-20240801-structure-20240801.csv: missing structure-20240801.csv",
+      "data-20240901-structure-20240901.csv: missing structure-20240901.csv",
+      "data-20241001-structure-20241001.csv: missing structure-20241001.csv",
+      "data-20241101-structure-20241101.csv: missing structure-20241101.csv",
+      "data-20241201-structure-20241201 (1).csv: missing structure-20241201.csv",
+      "data-20241201-structure-20241201.csv: missing structure-20241201.csv",
+      "data-20241216-structure-20241101 (1).csv: missing structure-20241101.csv",
+      "data-20241216-structure-20241101.csv: missing structure-20241101.csv",
+      "data-20250101-structure-20250101 (1).csv: missing structure-20250101.csv",
+      "data-20250101-structure-20250101.csv: missing structure-20250101.csv",
+      "data-20250401-structure-20250401 (1).csv: missing structure-20250401.csv",
+      "data-20250401-structure-20250401.csv: missing structure-20250401.csv",
+      "data-20250701-structure-20250701 (1).csv: missing structure-20250701.csv",
+      "data-20250701-structure-20250701.csv: missing structure-20250701.csv",
+      "data-20251001-structure-20251001 (1).csv: missing structure-20251001.csv",
+      "data-20251001-structure-20251001.csv: missing structure-20251001.csv"
+    ],
+    "rosstat_skipped": [
+      "ind_sub_2015-2025.xlsx: annual/non-monthly workbook",
+      "ind_sub_2020-2025.xlsx: annual/non-monthly workbook"
+    ],
+    "treasury_archives": [
+      "KBSRF-na-01.04.2023.zip",
+      "KBSRF-na-01.04.2024.zip",
+      "KBSRF-na-01.04.2025.zip",
+      "KBSRF-na-01.07.2023.zip",
+      "KBSRF-na-01.07.2024.zip",
+      "KBSRF-na-01.07.2025.zip",
+      "КБСРФ на 01.04.2026.zip",
+      "КБСРФ на 01.07.2026.zip"
+    ]
+  }
+}
