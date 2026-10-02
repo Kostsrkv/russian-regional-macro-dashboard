@@ -27,3 +27,6 @@ KBSRF*.zip
 ~$*.xlsx
 *.pdf
 met_*.docx
+
+# Unpromoted review candidates and private research exchange bundles stay local.
+outputs/

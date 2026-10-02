@@ -12,13 +12,23 @@ The public deployment must contain only code, configuration, documentation, and 
 
 - Keep original FNS, Treasury, Rosstat, and regional-budget downloads out of the public GitHub repository unless their redistribution status has been reviewed.
 - Keep the immutable raw archive and analyst working files private.
-- Publish only derived, disclosure-reviewed files under `data/promoted/current/`.
+- Publish only derived, disclosure-reviewed files under `data/promoted/current/` or a pinned research release under `data/dashboard/releases/`.
 - Include only the columns and regions needed by the dashboard. Remove source-document binaries, temporary conversions, local paths, analyst notes, and personal metadata.
 - Preserve provenance in the promoted tables: source agency, source URL, reporting cutoff, publication/retrieval date, source vintage, unit, and quality flags.
 - Do not publish a promoted vintage until the validation suite passes and an analyst approves it.
 - Never commit `.streamlit/secrets.toml`, API keys, VPN settings, cookies, credentials, or tokens. Community Cloud secrets belong in the app's **Advanced settings**.
 
-The application defaults to `data/promoted/current/`. `MACRO_RUS_DATA_DIR` may override that path in another environment, but Community Cloud should use the repository-relative default unless an external data source is intentionally introduced.
+The application loads the immutable processed release selected by `data/dashboard/current.json` when no local data-directory overrides are set. The pointer pins the release manifest checksum; every published payload is checked before the dashboard loads. Publication does not promote these research candidates to independently verified data. If there is no public-release pointer, the legacy default is `data/promoted/current/`.
+
+Explicit `MACRO_RUS_DATA_DIR` or `MACRO_RUS_*_CANDIDATE_DIR` overrides retain the private local-review workflow and bypass the public pointer. Community Cloud should use the checked-in pointer with no machine-specific directory overrides. The app does not require raw workbooks, local audit outputs, a VPN, or Russian-site access at runtime.
+
+## Current research release
+
+The 2026-10-02 release preserves the reviewed interface and processed observations for 78 eligible regions. It includes industry PIT, monthly/annual/cumulative industrial production, retained revenues, expenditure functions, social expenditure, fiscal balances and financing. It does not invent unavailable wages, consumer inflation, fuel prices, debt stocks or military-contract spending.
+
+The release remains `candidate_not_promoted`, with missingness, source vintages and plan-reconciliation caveats retained. CSV compression is lossless. Cumulative-production proofs are bounded for cloud distribution; the original private audit hashes and source-cell lineage remain recorded. Raw downloads, analyst documents, private research-exchange packages and the large audit histories are excluded.
+
+To select a future validated release or roll back the data without changing dashboard logic, update only the repository-relative path, release ID and manifest checksum in `data/dashboard/current.json`, then test and publish the new commit. Never overwrite a release directory. An invalid pointer or corrupted payload fails closed instead of silently serving the old pilot data.
 
 ## One-time GitHub setup
 

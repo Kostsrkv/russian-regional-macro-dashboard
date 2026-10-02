@@ -101,12 +101,13 @@ def _pit_fields(schema: pd.DataFrame) -> tuple[dict[str, str], list[str]]:
     return section_fields, unmapped
 
 
-def _selected_regions(regions: Iterable[str] | None) -> list[dict[str, object]]:
+def _selected_regions(regions: Iterable[str] | None, region_records=None) -> list[dict[str, object]]:
+    records = list(REGION_RECORDS if region_records is None else region_records)
     requested = {str(value).casefold() for value in regions or ()}
     if not requested:
-        return list(REGION_RECORDS)
+        return records
     selected = []
-    for record in REGION_RECORDS:
+    for record in records:
         aliases = {
             str(record["region_id"]).casefold(),
             str(record["region_name_en"]).casefold(),
@@ -121,6 +122,8 @@ def _selected_regions(regions: Iterable[str] | None) -> list[dict[str, object]]:
 def ingest_fns_result(
     raw_dir: str | Path,
     regions: Iterable[str] | None = None,
+    *,
+    region_records=None,
 ) -> FNSIngestionResult:
     """Ingest only releases with their exact matching schema.
 
@@ -131,8 +134,11 @@ def ingest_fns_result(
     """
 
     root = Path(raw_dir)
-    selected = _selected_regions(regions)
-    codes = {str(record["fns_code"]): record for record in selected}
+    selected = _selected_regions(regions, region_records)
+    code_key = lambda value: str(value).strip().lstrip("0") or "0"
+    codes = {code_key(record["fns_code"]): record for record in selected}
+    if len(codes) != len(selected):
+        raise ValueError("Duplicate FNS codes in regional mapping")
     names = {str(record["region_name_ru"]).casefold(): record for record in selected}
     frames: list[pd.DataFrame] = []
     sources: list[dict[str, object]] = []
@@ -169,7 +175,7 @@ def ingest_fns_result(
             low_memory=False,
         )
         region_rows = data.loc[
-            data["GA"].astype(str).str.strip().isin(codes)
+            data["GA"].map(code_key).isin(codes)
             | data["GB"].astype(str).str.strip().str.casefold().isin(names)
         ]
         release_date = pd.to_datetime(match.group("release"), format="%Y%m%d")
@@ -177,7 +183,7 @@ def ingest_fns_result(
         source_id = f"fns_1nom_{match.group('release')}_{digest[:12]}"
         vintage = f"fns-1nom-{match.group('release')}-{digest[:12]}"
         for source_row in region_rows.to_dict("records"):
-            record = codes.get(str(source_row.get("GA", "")).strip()) or names.get(
+            record = codes.get(code_key(source_row.get("GA", ""))) or names.get(
                 str(source_row.get("GB", "")).strip().casefold()
             )
             if record is None:

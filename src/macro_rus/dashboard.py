@@ -1,7 +1,7 @@
 """Region-first Streamlit interface for promoted canonical datasets.
 
 The module deliberately keeps analytical transforms small and transparent. It
-does not read raw source files: only a promoted vintage can reach the UI.
+does not read raw source files. Candidate fiscal data require an explicit preview opt-in.
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def pit_summary(frame: Any | None) -> dict[str, Any]:
 
     import pandas as pd
 
-    empty = {"period": None, "value": None, "yoy_pct": None, "measure": "pit_flow_rub"}
+    empty = {"period": None, "value": None, "yoy_pct": None, "measure": "pit_flow_rub", "coverage_changed": False, "missing_sections": []}
     if frame is None or frame.empty or "period" not in frame.columns:
         return empty
     measure = "pit_flow_rub" if "pit_flow_rub" in frame.columns else "pit_ytd_rub"
@@ -174,10 +174,19 @@ def pit_summary(frame: Any | None) -> dict[str, Any]:
     value = period_totals.iloc[-1]
     prior_period = period - pd.DateOffset(years=1)
     prior = period_totals.get(prior_period)
+    coverage_changed = False
+    missing_sections = []
+    section_column = "okved_section" if "okved_section" in work else "okved_raw" if "okved_raw" in work else None
+    if section_column:
+        current_sections = set(work.loc[work.period.eq(period), section_column].dropna())
+        prior_sections = set(work.loc[work.period.eq(prior_period), section_column].dropna())
+        coverage_changed = bool(prior_sections and current_sections != prior_sections)
+        missing_sections = sorted(set(work[section_column].dropna()) - current_sections)
     yoy = None
-    if prior is not None and pd.notna(prior) and prior != 0:
+    if prior is not None and pd.notna(prior) and prior != 0 and not coverage_changed:
         yoy = (value / prior - 1) * 100
-    return {"period": period, "value": float(value), "yoy_pct": yoy, "measure": measure}
+    return {"period": period, "value": float(value), "yoy_pct": yoy, "measure": measure,
+            "coverage_changed": coverage_changed, "missing_sections": missing_sections}
 
 
 def industry_snapshot(frame: Any | None) -> Any:
@@ -367,8 +376,10 @@ def classify_revenue(row: Mapping[str, Any]) -> str | None:
         return "CIT"
     if code.endswith("10000000000000000") or "tax and non-tax" in names or "налоговые и неналоговые" in names:
         return "Own-source revenue"
+    if code.endswith("20200000000000000") or "transfers from other budgets" in names:
+        return "Transfers from other budgets"
     if code.endswith("20000000000000000") or "gratuitous" in names or "transfers" in names or "безвозмездные поступления" in names:
-        return "Transfers"
+        return "Non-repayable receipts"
     if (
         code.endswith("00000000000000000")
         or "total revenue" in names
@@ -409,13 +420,15 @@ def fiscal_snapshot(frame: Any | None) -> Any:
     result = (
         work.groupby("metric", as_index=False)
         .agg(
-            actual_ytd_rub=("actual_ytd_rub", "sum"),
-            plan_rub=("plan_rub", "sum"),
+            actual_ytd_rub=("actual_ytd_rub", lambda values: values.sum(min_count=1)),
+            plan_rub=("plan_rub", lambda values: values.sum(min_count=1)),
             plan_basis=("plan_basis", "first"),
         )
     )
-    result["execution_pct"] = result["actual_ytd_rub"] / result["plan_rub"] * 100
-    order = {name: index for index, name in enumerate(("Total revenue", "Own-source revenue", "PIT", "CIT", "Transfers"))}
+    result["execution_pct"] = (result["actual_ytd_rub"] / result["plan_rub"] * 100).where(result.plan_rub.gt(0))
+    if "plan_components_reconciled" in work and not work.plan_components_reconciled.eq(True).all():
+        result["execution_pct"] = float("nan")
+    order = {name: index for index, name in enumerate(("Total revenue", "Own-source revenue", "PIT", "CIT", "Non-repayable receipts", "Transfers from other budgets"))}
     result["_order"] = result["metric"].map(order).fillna(99)
     return result.sort_values("_order").drop(columns="_order").reset_index(drop=True)[columns]
 
@@ -459,7 +472,11 @@ def source_summary(bundle: DataBundle, region_id: str, table_names: Iterable[str
     }
 
 
-def render_dashboard(data_root: str | Path) -> None:
+def render_dashboard(data_root: str | Path, fiscal_candidate_root: str | Path | None = None,
+                     macro_candidate_root: str | Path | None = None,
+                     revenue_candidate_root: str | Path | None = None,
+                     annual_candidate_root: str | Path | None = None,
+                     cumulative_candidate_root: str | Path | None = None) -> None:
     """Render the full local Streamlit dashboard."""
 
     import altair as alt
@@ -479,6 +496,50 @@ def render_dashboard(data_root: str | Path) -> None:
     st.title("Russian Regional Macro")
     st.caption("A region-first view of PIT receipts, industrial production, and fiscal execution")
 
+    if macro_candidate_root:
+        from macro_rus.macro_preview import load_macro_candidate
+        try:
+            candidate_tables, candidate_manifest = load_macro_candidate(Path(macro_candidate_root))
+            sources = pd.concat([bundle.get("sources"), candidate_tables.pop("sources")], ignore_index=True)
+            sources = sources.drop_duplicates("source_id", keep="last")
+            bundle = DataBundle(bundle.root, {**bundle.tables, **candidate_tables, "sources": sources}, bundle.errors.copy())
+            st.info("Research review dataset — expanded coverage is not independently verified. No national totals are calculated.")
+            st.warning("Mining PIT is absent from the latest FNS schemas. Aggregate PIT growth is withheld when section coverage changes. CPI-adjusted growth and per-capita measures are not yet available.")
+            with st.expander("Candidate coverage and limitations"):
+                st.json(candidate_manifest["tables"])
+                for limitation in candidate_manifest["limitations"]:
+                    st.write(limitation)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            st.error(f"Macro candidate unavailable: {exc}. Preview stopped; no fallback values shown.")
+            return
+
+    if revenue_candidate_root:
+        from macro_rus.revenue_view import load_revenue_candidate
+        try:
+            revenue_tables, revenue_manifest = load_revenue_candidate(Path(revenue_candidate_root))
+            sources = pd.concat([bundle.get("sources"), revenue_tables.pop("sources")], ignore_index=True).drop_duplicates("source_id", keep="last")
+            bundle = DataBundle(bundle.root, {**bundle.tables, **revenue_tables, "sources": sources}, bundle.errors.copy())
+            with st.expander("Revenue review coverage"):
+                st.write(f"{revenue_manifest['eligible_regions']} regions · {revenue_manifest['region_periods']} region-periods · {revenue_manifest['plan_warning_count']} source plan discrepancies")
+                for limitation in revenue_manifest["limitations"]:
+                    st.write(limitation)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            st.error(f"Revenue candidate unavailable: {exc}. Preview stopped; no fallback values shown.")
+            return
+
+    if cumulative_candidate_root:
+        from macro_rus.cumulative_production import load_cumulative_candidate
+        try:
+            cumulative, cumulative_manifest = load_cumulative_candidate(Path(cumulative_candidate_root))
+            bundle.tables["industrial_production_cumulative"] = cumulative
+            with st.expander("Same-window production coverage"):
+                st.caption("Source-native January-to-cutoff indices · same period previous year = 100 · research review dataset")
+                for limitation in cumulative_manifest.get("limitations", []):
+                    st.write(limitation)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            st.error(f"Cumulative production candidate unavailable: {exc}. Preview stopped; no fallback values shown.")
+            return
+
     if not bundle.has_analytical_data:
         _render_empty_promoted_state(st, bundle)
         return
@@ -487,6 +548,20 @@ def render_dashboard(data_root: str | Path) -> None:
     if not regions:
         st.error("The promoted files contain no usable region identifier. No values are shown.")
         return
+
+    promoted_region_ids = {item["region_id"] for item in regions}
+    if fiscal_candidate_root:
+        from macro_rus.fiscal_view import load_candidate
+        try:
+            candidate, _ = load_candidate(Path(fiscal_candidate_root))
+            bundle.tables["fiscal_observations"] = candidate
+            extra = candidate[["region_id", "region_name_ru"]].drop_duplicates()
+            for item in extra.sort_values("region_name_ru").to_dict("records"):
+                if item["region_id"] not in promoted_region_ids:
+                    regions.append({**item, "region_name_en": "",
+                                    "economic_profile": "Fiscal preview coverage only. Tax-by-industry and production series have not yet been integrated for this region."})
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            st.warning(f"Expanded fiscal region list unavailable: {exc}")
 
     labels = {
         item["region_id"]: item["region_name_en"] or item["region_name_ru"] or item["region_id"]
@@ -504,14 +579,18 @@ def render_dashboard(data_root: str | Path) -> None:
             st.caption(selected["region_name_ru"])
         page = st.radio(
             "View",
-            (
+            ((
                 "Macro overview",
                 "Industry PIT",
                 "Fiscal execution",
                 "PIT–production check",
                 "Optional comparison",
                 "Data & methodology",
-            ),
+            ) + (("Spending & financing (preview)", "Social spending (preview)") if fiscal_candidate_root else ())
+              + (("Fiscal changes (preview)",) if fiscal_candidate_root and revenue_candidate_root else ())
+              + (("Eligible-region overview (optional)",) if fiscal_candidate_root and revenue_candidate_root and cumulative_candidate_root else ())
+              + (("Annual production (preview)",) if annual_candidate_root else ()))
+            if selected_region in promoted_region_ids else ("Spending & financing (preview)",),
         )
         st.divider()
         st.caption("Comparison is optional; the selected region remains the analytical unit.")
@@ -535,66 +614,29 @@ def render_dashboard(data_root: str | Path) -> None:
         _render_cross_check(st, alt, bundle, selected_region)
     elif page == "Optional comparison":
         _render_comparison(st, alt, bundle, selected_region, regions, labels)
+    elif page == "Spending & financing (preview)":
+        from macro_rus.fiscal_view import render_fiscal_preview
+        render_fiscal_preview(st, alt, Path(fiscal_candidate_root), selected_region)
+    elif page == "Social spending (preview)":
+        from macro_rus.social_spending import render_social_spending
+        render_social_spending(st, alt, bundle.get("fiscal_observations"), selected_region)
+    elif page == "Annual production (preview)":
+        from macro_rus.annual_production import render_annual_preview
+        render_annual_preview(st, alt, annual_candidate_root, selected_region)
+    elif page == "Fiscal changes (preview)":
+        from macro_rus.fiscal_analysis import render_fiscal_analysis
+        render_fiscal_analysis(st, alt, bundle.get("fiscal_observations"), bundle.tables, selected_region)
+    elif page == "Eligible-region overview (optional)":
+        from macro_rus.regional_overview import render_regional_overview
+        render_regional_overview(st, bundle.get("fiscal_observations"), bundle.tables, bundle.get("industrial_production_cumulative"))
     else:
         _render_methodology(st, bundle, selected_region)
 
 
 def _render_overview(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> None:
-    metadata = source_summary(
-        bundle,
-        region_id,
-        ("pit_receipts", "industrial_production", "budget_execution"),
-    )
-    _render_metadata(st, metadata)
+    from macro_rus.regional_profile import render_regional_profile
 
-    pit = pit_summary(filter_region(bundle.get("pit_receipts"), region_id))
-    industrial = industrial_snapshot(filter_region(bundle.get("industrial_production"), region_id))
-    regional_budget = filter_region(bundle.get("budget_execution"), region_id)
-    fiscal = fiscal_snapshot(regional_budget)
-    pit_fiscal = _metric_row(fiscal, "PIT")
-    budget_period = latest_period(regional_budget)
-
-    columns = st.columns(3)
-    columns[0].metric(
-        f"PIT receipts · {_format_period(pit['period'])}",
-        _format_rub(pit["value"]),
-        _format_delta(pit["yoy_pct"], "YoY") if pit["yoy_pct"] is not None else None,
-        help="Formal taxable-income receipts. This is not a direct output or welfare measure.",
-    )
-    columns[1].metric(
-        f"Industrial output index · {_format_period(industrial['period'])}",
-        _format_index(industrial["headline"]),
-        help="Published headline only; sector indices are not averaged to create a substitute.",
-    )
-    columns[2].metric(
-        f"PIT plan execution · {_format_period(budget_period)}",
-        _format_pct(pit_fiscal.get("execution_pct") if pit_fiscal else None),
-        help="Cumulative receipts as a share of the reported annual plan. Not a shortfall verdict.",
-    )
-
-    st.subheader("What changed? Industries driving PIT movement")
-    industry = industry_snapshot(filter_region(bundle.get("pit_receipts"), region_id))
-    drivers = industry.dropna(subset=["change_rub"]).copy() if not industry.empty else industry
-    if drivers.empty:
-        st.info("A same-period prior-year PIT observation is not available, so contributions cannot yet be calculated.")
-    else:
-        drivers = drivers.reindex(drivers["change_rub"].abs().sort_values(ascending=False).index).head(10)
-        chart = _signed_bar_chart(
-            alt,
-            drivers,
-            category="industry",
-            value="change_rub",
-            title="Industry contribution to PIT change",
-            subtitle="RUB; latest period versus the same period one year earlier",
-        )
-        st.altair_chart(chart, width="stretch")
-        with st.expander("Accessible data table"):
-            table = drivers[["industry", "industry_ru", "okved_section", "change_rub"]].copy()
-            st.dataframe(table, hide_index=True, width="stretch")
-
-    st.info(
-        "These indicators describe momentum and fiscal execution. They do not, by themselves, identify sanctions or any other cause."
-    )
+    render_regional_profile(st, alt, bundle, region_id)
 
 
 def _render_industry(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> None:
@@ -607,6 +649,7 @@ def _render_industry(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> N
         return
 
     st.subheader("Industry structure")
+    st.caption("Shares use the sum of reported industries, not an independently reconciled regional PIT total. Missing sectors are not zero.")
     top = snapshot.head(12).copy()
     chart = (
         alt.Chart(top, title=alt.Title("PIT by industry", subtitle="Latest complete period; RUB"))
@@ -619,7 +662,7 @@ def _render_industry(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> N
                 alt.Tooltip("industry_ru:N", title="Russian label"),
                 alt.Tooltip("okved_section:N", title="OKVED2"),
                 alt.Tooltip("pit_rub:Q", title="PIT (RUB)", format=",.0f"),
-                alt.Tooltip("share_pct:Q", title="Share", format=".1f"),
+                alt.Tooltip("share_pct:Q", title="Share of reported PIT (%)", format=".1f"),
             ],
         )
         .properties(height=max(260, 28 * len(top)), description="Horizontal bars show PIT receipts by industry.")
@@ -632,7 +675,7 @@ def _render_industry(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> N
             "industry_ru": "Industry (Russian)",
             "okved_section": "OKVED2 section",
             "pit_rub": "PIT (RUB)",
-            "share_pct": "Share (%)",
+            "share_pct": "Share of reported PIT (%)",
             "change_rub": "Same-period YoY change (RUB)",
         }
     )
@@ -644,6 +687,15 @@ def _render_fiscal(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> Non
     metadata = source_summary(bundle, region_id, ("budget_execution",))
     _render_metadata(st, metadata)
     frame = filter_region(bundle.get("budget_execution"), region_id)
+    if bundle.get("revenue_lineage") is not None:
+        from macro_rus.revenue_view import render_revenue
+        render_revenue(st, alt, frame, region_id)
+        lineage = filter_region(bundle.get("revenue_lineage"), region_id)
+        with st.expander("Revenue source rows"):
+            st.dataframe(lineage, hide_index=True, width="stretch")
+            st.download_button("Download revenue source rows (CSV)", lineage.to_csv(index=False).encode("utf-8-sig"),
+                               file_name=f"revenue_lineage_{region_id}.csv", mime="text/csv")
+        return
     snapshot = fiscal_snapshot(frame)
     if snapshot.empty:
         _render_missing_table(st, "Fiscal execution", "budget_execution.parquet")
@@ -684,12 +736,52 @@ def _render_fiscal(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> Non
 
 
 def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> None:
-    metadata = source_summary(bundle, region_id, ("pit_receipts", "industrial_production"))
-    _render_metadata(st, metadata)
-    snapshot = cross_check_snapshot(
-        filter_region(bundle.get("pit_receipts"), region_id),
-        filter_region(bundle.get("industrial_production"), region_id),
-    )
+    import pandas as pd
+
+    same_window = bundle.get("industrial_production_cumulative") is not None
+    if not same_window:
+        _render_metadata(st, source_summary(bundle, region_id, ("pit_receipts", "industrial_production")))
+    if same_window:
+        from macro_rus.period_alignment import matched_pit_production
+        pit = filter_region(bundle.get("pit_receipts"), region_id)
+        if pit is None or pit.empty:
+            st.info("No PIT cutoffs are available for this region.")
+            return
+        periods = sorted(pd.to_datetime(pit.period).unique())
+        selected_period = st.selectbox("PIT–production reporting period", periods, index=len(periods)-1,
+            format_func=lambda value: f"January–{pd.Timestamp(value):%B %Y}")
+        try:
+            joined = matched_pit_production(pit, filter_region(bundle.get("industrial_production_cumulative"), region_id),
+                bundle.get("sources"), region_id=region_id, period=selected_period)
+        except (ValueError, KeyError, TypeError) as exc:
+            st.error(f"Same-window comparison withheld: {exc}")
+            return
+        end = pd.Timestamp(selected_period)
+        snapshot = dict(data=joined, pit_period=end, pit_prior_period=end-pd.DateOffset(years=1), production_period=end)
+        production_basis = "same period previous year"
+        pit_basis = "reported January-to-cutoff YTD"
+        if not joined.empty:
+            receipt_vintages = sorted(set(joined.pit_current_source_vintage.dropna()) | set(joined.pit_prior_source_vintage.dropna()))
+            st.caption(f"Selected PIT observations: {end:%d %b %Y} and {end-pd.DateOffset(years=1):%d %b %Y} · displayed units: nominal RUB")
+            st.caption("FNS vintages for this comparison: " + (", ".join(receipt_vintages) or "Unavailable"))
+            st.caption("FNS current release: " + (", ".join(sorted(joined.pit_current_source_file.dropna().unique())) or "Unavailable") +
+                " · prior release: " + (", ".join(sorted(joined.pit_prior_source_file.dropna().unique())) or "Unavailable"))
+            evidence = joined.dropna(subset=["production_source_file"])
+            if evidence.empty:
+                st.info("No source-native production observation is available at this PIT cutoff. No monthly index is substituted.")
+            else:
+                st.caption("Production source: " + ", ".join(evidence.production_source_file.unique()) +
+                    " · vintage: " + ", ".join(evidence.production_source_vintage.unique()) +
+                    " · same period previous year = 100 · candidate, not promoted")
+            if "production_index_base" in evidence and evidence.production_index_base.str.contains("2023", na=False).any():
+                st.caption("The current Rosstat headline workbook explicitly uses 2023 GVA weights; historical vintage and index-base information remain in the download.")
+    else:
+        snapshot = cross_check_snapshot(
+            filter_region(bundle.get("pit_receipts"), region_id),
+            filter_region(bundle.get("industrial_production"), region_id),
+        )
+        production_basis = "same month previous year"
+        pit_basis = "nominal quarterly flow"
     joined = snapshot["data"]
     if joined.empty:
         if snapshot["pit_period"] is not None:
@@ -703,11 +795,16 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
         return
 
     st.subheader("PIT and production signals by matching industrial section")
-    st.caption(
-        f"PIT: quarter ending {_format_period(snapshot['pit_period'])} versus the same quarter one year earlier. "
-        f"Production: {_format_period(snapshot['production_period'])} versus the same month one year earlier. "
-        "The measures are kept separate and are not combined into a score."
-    )
+    if same_window:
+        st.caption(f"Both windows: 1 January–{_format_period(snapshot['pit_period'])}, compared with the same span one year earlier. "
+            "PIT uses reported YTD receipts; production uses the published cumulative index. A December PIT observation is the full year, not Q4. "
+            "The measures are kept separate and are not combined into a score.")
+    else:
+        st.caption(
+            f"PIT: quarter ending {_format_period(snapshot['pit_period'])} versus the same quarter one year earlier. "
+            f"Production: {_format_period(snapshot['production_period'])} versus the same month one year earlier. "
+            "These windows differ. The measures are kept separate and are not combined into a score."
+        )
 
     production_plot = joined.dropna(subset=["index_value"]).copy()
     if not production_plot.empty:
@@ -723,7 +820,7 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
             ),
             x=alt.X(
                 "index_value:Q",
-                title="Production index (same month previous year = 100)",
+                title=f"Production index ({production_basis} = 100)",
                 scale=alt.Scale(domain=[lower, upper], zero=False),
                 axis=alt.Axis(tickCount=7),
             ),
@@ -744,7 +841,7 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
             height=220,
             title=alt.Title(
                 "Industrial production",
-                subtitle=f"{_format_period(snapshot['production_period'])}; 100 = unchanged from the same month one year earlier",
+                subtitle=f"{_format_period(snapshot['production_period'])}; 100 = unchanged from the {production_basis}",
             ),
             description="A dot plot compares production indices with the no-change benchmark of 100.",
         )
@@ -752,7 +849,17 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
 
     pit_plot = joined.dropna(subset=["pit_yoy_pct"]).copy()
     missing_pit_sections = joined.loc[joined["pit_yoy_pct"].isna(), "okved_section"].dropna().tolist()
-    if missing_pit_sections and not pit_plot.empty:
+    if same_window and missing_pit_sections:
+        reasons = {
+            "current_pit_unavailable": "current PIT receipt unavailable",
+            "prior_pit_unavailable": "matching prior-year PIT unavailable",
+            "nonpositive_prior_pit_growth_withheld": "prior PIT is zero or negative; percentage growth withheld",
+        }
+        for flag, description in reasons.items():
+            sections = joined.loc[joined.availability.str.contains(flag, regex=False), "okved_section"].tolist()
+            if sections:
+                st.warning(f"OKVED2 {', '.join(sections)}: {description}. No missing comparison is rendered as zero.")
+    elif missing_pit_sections and not pit_plot.empty:
         st.warning(
             "PIT comparison is unavailable for OKVED2 "
             f"{', '.join(missing_pit_sections)} in the current FNS release. "
@@ -760,14 +867,17 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
         )
     if pit_plot.empty:
         st.info(
-            "PIT year-on-year comparison is unavailable because a matching prior-year FNS observation "
-            "has not been ingested. Missing values are not displayed as zero."
+            "No valid nominal PIT percentage comparison is available for this window. "
+            "Missing observations and nonpositive prior-year denominators are not displayed as zero growth."
         )
     else:
         pit_plot["direction"] = pit_plot["pit_yoy_pct"].map(
             lambda value: "Increase" if value >= 0 else "Decrease"
         )
         pit_plot["value_label"] = pit_plot["pit_yoy_pct"].map(lambda value: f"{value:+.1f}%")
+        padding = max(6.0, float(pit_plot.pit_yoy_pct.abs().max()) * .18)
+        domain = [min(0.0, float(pit_plot.pit_yoy_pct.min()))-padding,
+                  max(0.0, float(pit_plot.pit_yoy_pct.max()))+padding]
         base = alt.Chart(pit_plot).encode(
             y=alt.Y(
                 "industry:N",
@@ -775,7 +885,7 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
                 title=None,
                 axis=alt.Axis(labelLimit=220, labelOverlap=False),
             ),
-            x=alt.X("pit_yoy_pct:Q", title="Nominal PIT growth (%)", axis=alt.Axis(tickCount=7)),
+            x=alt.X("pit_yoy_pct:Q", title="Nominal PIT growth (%)", axis=alt.Axis(tickCount=7), scale=alt.Scale(domain=domain)),
             tooltip=[
                 alt.Tooltip("industry:N", title="Industry"),
                 alt.Tooltip("okved_section:N", title="OKVED2"),
@@ -791,12 +901,13 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
             )
         )
         zero = alt.Chart({"values": [{"zero": 0}]}).mark_rule(color=INK).encode(x="zero:Q")
-        labels = base.mark_text(align="left", dx=5, color=INK).encode(text="value_label:N")
-        chart = (bars + zero + labels).properties(
+        positive_labels = base.transform_filter(alt.datum.pit_yoy_pct >= 0).mark_text(align="left", dx=5, color=INK).encode(text="value_label:N")
+        negative_labels = base.transform_filter(alt.datum.pit_yoy_pct < 0).mark_text(align="right", dx=-5, color=INK).encode(text="value_label:N")
+        chart = (bars + zero + positive_labels + negative_labels).properties(
             height=220,
             title=alt.Title(
                 "Industry-attributed PIT receipts",
-                subtitle=f"Nominal quarterly flow; {_format_period(snapshot['pit_period'])} versus {_format_period(snapshot['pit_prior_period'])}",
+                subtitle=f"{pit_basis.capitalize()}; {_format_period(snapshot['pit_period'])} versus {_format_period(snapshot['pit_prior_period'])}",
             ),
             description="Signed horizontal bars show nominal PIT growth by industrial section.",
         )
@@ -817,6 +928,8 @@ def _render_cross_check(st: Any, alt: Any, bundle: DataBundle, region_id: str) -
     )
     with st.expander("Accessible data table"):
         st.dataframe(display, hide_index=True, width="stretch")
+    st.download_button("Download PIT–production comparison (CSV)", joined.to_csv(index=False).encode("utf-8-sig"),
+        file_name=f"pit_production_{region_id}_{pd.Timestamp(snapshot['pit_period']):%Y%m%d}.csv", mime="text/csv")
     st.info(
         "Divergence is not necessarily contradictory: wage inflation, bonuses, labour scarcity, tax timing, and classification changes can move PIT independently of physical output."
     )
@@ -877,7 +990,7 @@ def _render_methodology(st: Any, bundle: DataBundle, region_id: str) -> None:
     )
     quality = filter_region(bundle.get("quality_events"), region_id)
     if quality is None or quality.empty:
-        st.info("No region-specific quality events are recorded in the promoted vintage.")
+        st.info("No additional region-specific quality events are recorded. This does not imply verification; preview warnings and coverage limits still apply.")
     else:
         preferred = [
             column
@@ -913,6 +1026,30 @@ def _render_methodology(st: Any, bundle: DataBundle, region_id: str) -> None:
             if column in selected.columns
         ]
         st.dataframe(selected[columns], hide_index=True, width="stretch")
+
+    cumulative = filter_region(bundle.get("industrial_production_cumulative"), region_id)
+    if cumulative is not None and not cumulative.empty:
+        st.subheader("Source-native cumulative production register")
+        evidence_columns = ["source_file", "source_sha256", "source_vintage", "source_sheet", "index_base", "index_measure"]
+        st.dataframe(cumulative[evidence_columns].drop_duplicates(), hide_index=True, width="stretch")
+        st.caption("The source row/cell and original value remain in the download. January-to-cutoff indices are not averaged monthly growth rates, standalone Q2 indices, or chained output levels.")
+        st.download_button("Download cumulative production source evidence (CSV)", cumulative.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"cumulative_production_{region_id}.csv", mime="text/csv", key=f"methodology_cumulative_{region_id}")
+
+    st.subheader("Download this region’s data")
+    for table_name in ("pit_receipts", "industrial_production", "budget_execution"):
+        regional = filter_region(bundle.get(table_name), region_id)
+        if regional is not None and not regional.empty:
+            st.download_button(
+                f"Download {DATASET_LABELS[table_name]} (CSV)",
+                regional.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"{table_name}_{region_id}.csv", mime="text/csv",
+                key=f"methodology_download_{table_name}_{region_id}")
+    if sources is not None and not sources.empty:
+        selected_sources = sources.loc[sources.source_id.astype(str).isin(used_ids)].copy()
+        st.download_button("Download selected source register (CSV)",
+                           selected_sources.to_csv(index=False).encode("utf-8-sig"),
+                           file_name=f"sources_{region_id}.csv", mime="text/csv")
 
 
 def _signed_bar_chart(alt: Any, frame: Any, category: str, value: str, title: str, subtitle: str) -> Any:

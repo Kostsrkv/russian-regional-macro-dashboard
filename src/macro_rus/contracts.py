@@ -131,6 +131,7 @@ TABLE_FILES = {
 
 ALLOWED_FREQUENCIES = {"monthly", "quarterly", "annual"}
 ALLOWED_QUALITY_STATUSES = {
+    "warning",  # Review candidates with documented comparability/coverage limits.
     "verified",
     "provisional",
     "revised",
@@ -157,4 +158,3 @@ class DatasetPaths:
     @property
     def manifest(self) -> Path:
         return self.root / "manifest.json"
-

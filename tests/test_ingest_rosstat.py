@@ -30,3 +30,14 @@ def test_rosstat_reads_monthly_headline_and_be_sections(tmp_path: Path):
     assert set(frame["index_base"]) == {"2023-base basket"}
     assert frame["source_id"].nunique() == 1
 
+
+def test_rosstat_explicit_source_alias_retains_canonical_identity(tmp_path):
+    path = tmp_path / "ind_sub_2023_07-2026.xlsx"
+    _monthly_workbook(path)
+    frame = ingest_rosstat_result(tmp_path, region_records=[{
+        "region_id": "TEST", "region_name_ru": "Canonical fixture", "region_name_en": "",
+        "rosstat_name_ru": "Калужская область",
+    }]).industrial_production
+    assert len(frame) == 5
+    assert set(frame.region_id) == {"TEST"}
+    assert set(frame.region_name_ru) == {"Canonical fixture"}

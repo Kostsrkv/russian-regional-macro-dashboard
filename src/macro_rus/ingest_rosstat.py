@@ -37,12 +37,13 @@ class RosstatIngestionResult:
     skipped_files: tuple[str, ...]
 
 
-def _selected_regions(regions: Iterable[str] | None) -> list[dict[str, object]]:
+def _selected_regions(regions: Iterable[str] | None, region_records=None) -> list[dict[str, object]]:
+    records = list(REGION_RECORDS if region_records is None else region_records)
     requested = {str(value).casefold() for value in regions or ()}
     if not requested:
-        return list(REGION_RECORDS)
+        return records
     return [
-        record for record in REGION_RECORDS
+        record for record in records
         if requested & {
             str(record["region_id"]).casefold(),
             str(record["region_name_en"]).casefold(),
@@ -70,11 +71,14 @@ def _sheet_rows(workbook, sheet_name: str, records: list[dict[str, object]]) -> 
             current_year = int(match.group(1))
         years.append(current_year)
     months = [MONTHS.get(str(cell.value or "").strip().casefold()) for cell in sheet[5][1:]]
-    wanted = {str(record["region_name_ru"]).strip().casefold(): record for record in records}
+    normalize = lambda value: re.sub(r"[\s.\-–—]+", "", str(value).casefold().replace("ё", "е"))
+    wanted = {normalize(record.get("rosstat_name_ru") or record["region_name_ru"]): record for record in records}
+    if len(wanted) != len(records):
+        raise ValueError("Duplicate Rosstat names in regional mapping")
     section, name_en, name_ru = SHEETS[sheet_name]
     output: list[dict[str, object]] = []
     for row in sheet.iter_rows(min_row=6, values_only=True):
-        region_name = str(row[0] or "").strip().casefold()
+        region_name = normalize(row[0] or "")
         record = wanted.get(region_name)
         if record is None:
             continue
@@ -104,9 +108,11 @@ def _sheet_rows(workbook, sheet_name: str, records: list[dict[str, object]]) -> 
 def ingest_rosstat_result(
     raw_dir: str | Path,
     regions: Iterable[str] | None = None,
+    *,
+    region_records=None,
 ) -> RosstatIngestionResult:
     root = Path(raw_dir)
-    records = _selected_regions(regions)
+    records = _selected_regions(regions, region_records)
     frames: list[pd.DataFrame] = []
     sources: list[dict[str, object]] = []
     skipped: list[str] = []

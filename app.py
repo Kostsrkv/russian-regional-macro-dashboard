@@ -1,4 +1,4 @@
-"""Local entry point for the Russian regional macro dashboard."""
+"""Local and Streamlit Cloud entry point for the regional macro dashboard."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ def main() -> None:
     import streamlit as st
 
     from macro_rus.dashboard import render_dashboard
+    from macro_rus.cloud_release import resolve_dashboard_config
 
     st.set_page_config(
         page_title="Russian Regional Macro",
@@ -25,13 +26,14 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    data_root = Path(
-        os.environ.get(
-            "MACRO_RUS_DATA_DIR",
-            PROJECT_ROOT / "data" / "promoted" / "current",
-        )
-    )
-    render_dashboard(data_root)
+    try:
+        config = resolve_dashboard_config(PROJECT_ROOT, os.environ)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        st.error(f"Published research dataset unavailable: {exc}")
+        return
+    if config.release_id:
+        st.sidebar.caption(f"Research release: {config.release_id} · not independently verified")
+    render_dashboard(*config.render_arguments())
 
 
 if __name__ == "__main__":
