@@ -1115,6 +1115,9 @@ def _apply_accessible_styles(st: Any) -> None:
 :root {{ color-scheme: light; }}
 .stApp {{ color: {INK}; background: #FFFFFF; }}
 [data-testid="stMetric"] {{ border: 1px solid {GRID}; padding: 0.9rem; border-radius: 0.35rem; }}
+[data-testid="stMetricValue"],
+[data-testid="stMetricValue"] [data-testid="stMarkdownContainer"],
+[data-testid="stMetricValue"] p {{ font-size: 2rem; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }}
 [data-testid="stSidebar"] {{ border-right: 1px solid {GRID}; }}
 :focus-visible {{ outline: 3px solid {ORANGE} !important; outline-offset: 2px !important; }}
 .stCaption {{ color: {MUTED}; }}

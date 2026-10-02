@@ -175,5 +175,22 @@ class DashboardTransformTests(unittest.TestCase):
         self.assertAlmostEqual(result.loc[0, "execution_pct"], 50.0)
 
 
+def test_metric_style_keeps_long_amounts_visible():
+    from macro_rus.dashboard import _apply_accessible_styles
+
+    class Recorder:
+        def markdown(self, body, **kwargs):
+            self.body = body
+            self.options = kwargs
+
+    recorder = Recorder()
+    _apply_accessible_styles(recorder)
+    assert '[data-testid="stMetricValue"] p' in recorder.body
+    assert "white-space: normal" in recorder.body
+    assert "text-overflow: clip" in recorder.body
+    assert "overflow-wrap: anywhere" in recorder.body
+    assert recorder.options["unsafe_allow_html"] is True
+
+
 if __name__ == "__main__":
     unittest.main()
