@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "candidate_not_promoted",
+  "distribution_mode": "cloud_processed_fuel_v1",
+  "raw_files_included": false,
+  "dataset": "fuel_prices_eligible_regions_candidate.parquet",
+  "measurement_basis": "average_consumer_price_at_end_of_month",
+  "units": "RUB/litre",
+  "observation_timing": "end_of_reporting_month",
+  "sources": [
+    {
+      "filename": "sred_potreb_cen_2022.xlsx",
+      "sha256": "94d58542634ac34096bdf5261d003e57a2ee474fe54d7153daaea6d92d57a2c6",
+      "role": "monthly_average_consumer_price_levels"
+    },
+    {
+      "filename": "sred_potreb_cen_2023.xlsx",
+      "sha256": "6fb4297765a110923566f9518aec77f6c56ae76f0f8a3b9e5d721ba3572359ed",
+      "role": "monthly_average_consumer_price_levels"
+    },
+    {
+      "filename": "sred_potreb_cen_2024.xlsx",
+      "sha256": "b35330ad824fa4cfb85ba92718084772b8c113cb4ee7258f4ff5147e2f995ef3",
+      "role": "monthly_average_consumer_price_levels"
+    },
+    {
+      "filename": "sred_potreb_cen_2025.xlsx",
+      "sha256": "0ac8adc81a31bd2d13018538475d1d875a74b3dae48e02c6b60e178403d567ec",
+      "role": "monthly_average_consumer_price_levels"
+    },
+    {
+      "filename": "sred_potreb_cen_08-2026.xlsx",
+      "sha256": "0303a5fc3ed434eacf37e29c53df6f36fcf0a19e163f8ffd2cc7537994d8f96c",
+      "role": "monthly_average_consumer_price_levels"
+    }
+  ],
+  "source_publication_date": null,
+  "source_retrieval_date": null,
+  "source_authenticity": "not_independently_verified",
+  "audit_summary": {
+    "audit_executed_at_utc": "2026-10-05T15:42:53.748143+00:00",
+    "status": "candidate_not_promoted",
+    "period_start": "2022-01-01",
+    "period_end": "2026-08-01",
+    "months": 56,
+    "existing_dashboard_eligible_regions": 78,
+    "eligible_all_fuel_observations_expected": 21840,
+    "eligible_all_fuel_observations_missing": 112,
+    "eligible_core_fuel_observations_expected": 13104,
+    "eligible_core_fuel_observations_missing": 0,
+    "eligible_core_fuel_observations_nonpositive": 0,
+    "independent_raw_cell_checks": 164,
+    "independent_raw_cell_checks_failed": 0,
+    "matched_month_on_month_changes": 12870,
+    "month_on_month_review_flags_abs_above10pct": 120
+  },
+  "limitations": [
+    "Publication does not promote observations to independently verified data.",
+    "Spatial-average end-of-month fuel prices; not official CPI or daily pump quotes.",
+    "Source publication/retrieval dates and URLs were not recorded.",
+    "Large monthly changes remain flagged; their economic explanation is not verified.",
+    "Optional missing grades remain missing; no national average is calculated."
+  ],
+  "dataset_sha256": "5f8449e168b007704599fa0333a83a8fc184701a2033010ee60b1e8ebf89e434"
+}

@@ -24,9 +24,11 @@ Explicit `MACRO_RUS_DATA_DIR` or `MACRO_RUS_*_CANDIDATE_DIR` overrides retain th
 
 ## Current research release
 
-The 2026-10-02 release preserves the reviewed interface and processed observations for 78 eligible regions. It includes industry PIT, monthly/annual/cumulative industrial production, retained revenues, expenditure functions, social expenditure, fiscal balances and financing. It does not invent unavailable wages, consumer inflation, fuel prices, debt stocks or military-contract spending.
+The 2026-10-05 release preserves the macro and fiscal observations from the 2026-10-02 release byte-for-byte for 78 eligible regions. It includes industry PIT, monthly/annual/cumulative industrial production, retained revenues, expenditure functions, social expenditure, fiscal balances and financing. It adds a separately labelled fuel-price research preview with end-of-month regional prices from January 2022 through August 2026 and responsive month/year history labels. It does not invent unavailable wages, consumer inflation, debt stocks or military-contract spending.
 
-The release remains `candidate_not_promoted`, with missingness, source vintages and plan-reconciliation caveats retained. CSV compression is lossless. Cumulative-production proofs are bounded for cloud distribution; the original private audit hashes and source-cell lineage remain recorded. Raw downloads, analyst documents, private research-exchange packages and the large audit histories are excluded.
+The release remains `candidate_not_promoted`, with missingness, source vintages and plan-reconciliation caveats retained. Fuel prices are not CPI; unknown source publication/retrieval dates and flagged large monthly movements remain disclosed. CSV compression is lossless. Cumulative-production proofs are bounded for cloud distribution; the original private audit hashes and source-cell lineage remain recorded. Raw downloads, analyst documents, private research-exchange packages and the large audit histories are excluded.
+
+The original 2026-10-02 snapshot is retained for data-only rollback. See `docs/STREAMLIT_RELEASE_2026-10-05.md` for the exact pointer and release checks.
 
 To select a future validated release or roll back the data without changing dashboard logic, update only the repository-relative path, release ID and manifest checksum in `data/dashboard/current.json`, then test and publish the new commit. Never overwrite a release directory. An invalid pointer or corrupted payload fails closed instead of silently serving the old pilot data.
 

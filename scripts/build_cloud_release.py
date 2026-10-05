@@ -27,6 +27,8 @@ from macro_rus.fiscal_view import load_candidate as load_fiscal_candidate
 from macro_rus.macro_preview import load_macro_candidate
 from macro_rus.provenance import sha256_file
 from macro_rus.revenue_view import load_revenue_candidate
+from macro_rus.fuel_prices import load_fuel_candidate
+from macro_rus.cloud_release import FUEL_PUBLIC_FILES
 
 RELEASE_ID = "2026-10-02"
 RELEASE_DIRECTORY = RELEASE_ID + "-cloud-v1"
@@ -172,13 +174,17 @@ def _load_envelopes(root: Path) -> dict[str, pd.DataFrame]:
     fiscal, _ = load_fiscal_candidate(root / "fiscal")
     annual, _ = load_annual_candidate(root / "annual")
     cumulative, _ = load_cumulative_candidate(root / "cumulative")
-    return {"pit_receipts": macro["pit_receipts"],
+    tables = {"pit_receipts": macro["pit_receipts"],
             "industrial_production": macro["industrial_production"],
             "macro_sources": macro["sources"],
             "budget_execution": revenue["budget_execution"],
             "revenue_sources": revenue["sources"], "revenue_lineage": revenue["revenue_lineage"],
             "fiscal_observations": fiscal, "industrial_production_annual": annual,
             "industrial_production_cumulative": cumulative}
+    if (root / "fuel").is_dir():
+        tables["fuel_prices"], _ = load_fuel_candidate(
+            root / "fuel", eligible_region_ids=macro["pit_receipts"].region_id.unique())
+    return tables
 
 
 def _load_inputs(workspace: Path) -> dict[str, pd.DataFrame]:
@@ -203,12 +209,12 @@ def _table_summary(frame: pd.DataFrame) -> dict:
     return result
 
 
-def validate_cloud_release(output: Path) -> dict:
+def validate_cloud_release(output: Path, *, release_id: str = RELEASE_ID) -> dict:
     """Verify the bounded payload census, every file hash and all runtime loaders."""
     output = Path(output)
     manifest = json.loads((output / "manifest.json").read_text())
     if (manifest.get("schema_version") != 1 or manifest.get("review_status") != "candidate_not_promoted"
-            or manifest.get("release_id") != RELEASE_ID or manifest.get("raw_files_included") is not False):
+            or manifest.get("release_id") != release_id or manifest.get("raw_files_included") is not False):
         raise ValueError("Unrecognized public release envelope")
     compact = manifest.get("cumulative_runtime_profile") == "cloud_compact_processed_v1"
     distribution = manifest.get("csv_distribution", "plain_csv")
@@ -217,6 +223,8 @@ def validate_cloud_release(output: Path) -> dict:
     expected = {f"{kind}/{file}" for kind, files in _files(
                     compact, distribution == "deterministic_gzip_v1").items()
                 for file in (*files, "manifest.json")}
+    if manifest.get("runtime_directories", {}).get("fuel") == "fuel":
+        expected |= {f"fuel/{file}" for file in FUEL_PUBLIC_FILES}
     payloads = manifest.get("payloads")
     if not isinstance(payloads, dict) or set(payloads) != expected:
         raise ValueError("Public release payload allowlist mismatch")

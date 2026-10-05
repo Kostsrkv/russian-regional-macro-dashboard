@@ -1,0 +1,68 @@
+{
+  "status": "candidate_not_promoted",
+  "rows": 14664,
+  "region_periods": 624,
+  "blocking_failures": 0,
+  "plan_warnings": 518,
+  "sources": [
+    {
+      "source_file": "KBSRF-na-01.04.2023.zip",
+      "sha256": "758dff788c248966f48404b03e1a673d18619a5556e96f68c9b204e1755329c5",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.04.2024.zip",
+      "sha256": "035db26fdc620036a950e5852bd00e56b292d2cb3c637990824c1546f407694f",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.04.2025.zip",
+      "sha256": "d83c90845b7d542ce93141103cd5aa4d4b5786033f394698f88647d24d5eba1d",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2023.zip",
+      "sha256": "aaf538a8acc87df8c12ed07da68bfc33b5b350b5e4c87397b910a6cd6a469f7a",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2024.zip",
+      "sha256": "4c9286a97a9998619e1d03b1f793dc015852de89f53798c2da9ae1f3b23235f0",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2025.zip",
+      "sha256": "640c35f79d0aa2f1de3ba2d29dae2de632d8437d2b77bbe8c0e7cc8e84d7fe75",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "КБСРФ на 01.04.2026.zip",
+      "sha256": "c34b80870786e54660fbbd97d30e010cc57e405d0e872297afe0c70e1d89bbaa",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": "Доходы_расходы_источники по графам на 01.04.2026.zip",
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "КБСРФ на 01.07.2026.zip",
+      "sha256": "050a02364008b15e521a0dfc9d2cf8dd601527122ea7f357713a6005ceb95dc6",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": "Доходы_расходы_источники по графам на 01.07.2026.zip",
+      "selected_html_crc_passed": true
+    }
+  ],
+  "publication_context": "Processed aggregate snapshot for Streamlit; observations retain their original review status.",
+  "observations_file": "fiscal_observations.csv.gz",
+  "observations_sha256": "96319f68a71cffbf8832130e5d54d971e70267e949a9412a3f53a1c5882af19d"
+}

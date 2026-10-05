@@ -33,7 +33,12 @@ def main() -> None:
         return
     if config.release_id:
         st.sidebar.caption(f"Research release: {config.release_id} · not independently verified")
-    render_dashboard(*config.render_arguments())
+    # Explicit private overrides win; cloud uses only its checksummed release.
+    fuel_root = os.environ.get("MACRO_RUS_FUEL_CANDIDATE_DIR") or config.fuel_root
+    if fuel_root:
+        render_dashboard(*config.render_arguments(), fuel_candidate_root=Path(fuel_root))
+    else:
+        render_dashboard(*config.render_arguments())
 
 
 if __name__ == "__main__":

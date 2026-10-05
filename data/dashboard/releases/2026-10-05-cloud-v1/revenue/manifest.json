@@ -1,0 +1,102 @@
+{
+  "status": "candidate_not_promoted",
+  "rows": 3744,
+  "eligible_regions": 78,
+  "region_periods": 624,
+  "periods": [
+    "2023-03-31",
+    "2023-06-30",
+    "2024-03-31",
+    "2024-06-30",
+    "2025-03-31",
+    "2025-06-30",
+    "2026-03-31",
+    "2026-06-30"
+  ],
+  "blocking_failures": 0,
+  "accounting_checks": 1248,
+  "pilot_parity_rows": 80,
+  "plan_warning_count": 23,
+  "sources": [
+    {
+      "source_file": "KBSRF-na-01.04.2023.zip",
+      "sha256": "758dff788c248966f48404b03e1a673d18619a5556e96f68c9b204e1755329c5",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.04.2024.zip",
+      "sha256": "035db26fdc620036a950e5852bd00e56b292d2cb3c637990824c1546f407694f",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.04.2025.zip",
+      "sha256": "d83c90845b7d542ce93141103cd5aa4d4b5786033f394698f88647d24d5eba1d",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2023.zip",
+      "sha256": "aaf538a8acc87df8c12ed07da68bfc33b5b350b5e4c87397b910a6cd6a469f7a",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2024.zip",
+      "sha256": "4c9286a97a9998619e1d03b1f793dc015852de89f53798c2da9ae1f3b23235f0",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "KBSRF-na-01.07.2025.zip",
+      "sha256": "640c35f79d0aa2f1de3ba2d29dae2de632d8437d2b77bbe8c0e7cc8e84d7fe75",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": null,
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "КБСРФ на 01.04.2026.zip",
+      "sha256": "c34b80870786e54660fbbd97d30e010cc57e405d0e872297afe0c70e1d89bbaa",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": "Доходы_расходы_источники по графам на 01.04.2026.zip",
+      "selected_html_crc_passed": true
+    },
+    {
+      "source_file": "КБСРФ на 01.07.2026.zip",
+      "sha256": "050a02364008b15e521a0dfc9d2cf8dd601527122ea7f357713a6005ceb95dc6",
+      "catalogue_entries": 91,
+      "ancillary_crc_failure": "Доходы_расходы_источники по графам на 01.07.2026.zip",
+      "selected_html_crc_passed": true
+    }
+  ],
+  "concordance_sha256": "4236e8c42ea37e6778ed646c55cd58c9817ddeb12f33a49f589049df6b6d818b",
+  "derived_hashes": {
+    "budget_execution.parquet": "57df6b1a0a9e9039f2dbdf1ef8886ea258ffe0de474732d84e4d4b733ac5fc4a",
+    "sources.csv": "0e54d766c6da3b6563b012a446b3f63f17597f16a78dedc7400860b4755652a4",
+    "lineage.csv.gz": "27f4bbb3fe88c8873550bf5b2213eb4594ff9592e80fce4a48a52f4f2ce37de8"
+  },
+  "limitations": [
+    "Review candidate, not promoted",
+    "Actuals are cumulative within each year",
+    "Snapshot plans do not identify original or amended budget histories",
+    "Transfers from other budgets are not necessarily exclusively federal",
+    "No national totals; overlap and separate-geography holds remain",
+    "Missing inflation, population and debt stock inputs remain unavailable"
+  ],
+  "publication_context": "Processed aggregate snapshot for Streamlit; observations retain their original review status.",
+  "upstream_derived_hashes": {
+    "coverage.csv": "ff32cdc7ab53d428666a3b2e2ede58b29d56660a51e1f42858dcf9ca4ca2c073",
+    "lineage.csv": "e375d41f10b6a3218ef6e4e543806f4d871aaab1135bc791a572b951fcd16453",
+    "budget_execution.parquet": "57df6b1a0a9e9039f2dbdf1ef8886ea258ffe0de474732d84e4d4b733ac5fc4a",
+    "validation_checks.csv": "d946ea5f8bd9615e1807796e963543b54159a0181165c92cd30c9de15d27355d",
+    "accounting_checks.csv": "a17c61d3deef1bab25958a95752d9476eeb70b8ec1b72c6b812c72ffb3925e41",
+    "sources.csv": "0e54d766c6da3b6563b012a446b3f63f17597f16a78dedc7400860b4755652a4"
+  },
+  "lineage_file": "lineage.csv.gz"
+}

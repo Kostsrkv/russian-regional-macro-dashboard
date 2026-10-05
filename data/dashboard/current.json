@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release_id": "2026-10-02",
-  "release_path": "releases/2026-10-02-cloud-v1",
-  "manifest_sha256": "986e4984851b276c2880ad907644a253200a17e927d46c0c068115795e85c1ce"
+  "release_id": "2026-10-05",
+  "release_path": "releases/2026-10-05-cloud-v1",
+  "manifest_sha256": "669c0171aa1110b78c063840680865008f6b8944e99b26d8c872a53825cdd88a"
 }

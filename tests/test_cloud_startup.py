@@ -11,12 +11,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_public_default_and_explicit_local_override():
     config = resolve_dashboard_config(ROOT, {})
-    assert config.release_id == "2026-10-02"
+    assert config.release_id == "2026-10-05"
     assert len(config.render_arguments()) == 6
     assert all(path.is_dir() for path in config.candidates.values())
+    assert config.fuel_root.is_dir()
     local = resolve_dashboard_config(ROOT, {"MACRO_RUS_DATA_DIR": "/tmp/example-only"})
     assert local.release_id is None and local.data_root == Path("/tmp/example-only")
     assert all(path is None for path in local.candidates.values())
+    assert local.fuel_root is None
 
 
 def test_pointer_tampering_and_path_escape_fail_closed(tmp_path):
@@ -36,7 +38,7 @@ def test_pointer_tampering_and_path_escape_fail_closed(tmp_path):
 def test_cloud_all_views_and_region_selection(monkeypatch):
     from streamlit.testing.v1 import AppTest
 
-    for variable in ["MACRO_RUS_DATA_DIR", *OVERRIDES.values()]:
+    for variable in ["MACRO_RUS_DATA_DIR", *OVERRIDES.values(), "MACRO_RUS_FUEL_CANDIDATE_DIR"]:
         monkeypatch.delenv(variable, raising=False)
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=40).run()
     assert not app.exception and not app.error

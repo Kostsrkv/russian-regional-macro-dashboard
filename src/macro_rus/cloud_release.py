@@ -23,6 +23,7 @@ PUBLIC_FILES = {
                    "source_basis_evidence.csv", "coverage.csv", "missing_observations.csv",
                    "pilot_q1_handchecks.csv"},
 }
+FUEL_PUBLIC_FILES = {"manifest.json", "fuel_prices_eligible_regions_candidate.parquet"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class DashboardConfig:
     data_root: Path
     candidates: Mapping[str, Path | None]
     release_id: str | None = None
+    fuel_root: Path | None = None
 
     def render_arguments(self) -> tuple:
         return (self.data_root, *(self.candidates[name] for name in OVERRIDES))
@@ -68,17 +70,21 @@ def resolve_dashboard_config(project_root: Path, environ: Mapping[str, str]) -> 
             or manifest.get("review_status") != "candidate_not_promoted"
             or manifest.get("raw_files_included") is not False):
         raise ValueError("Unrecognized public research release")
-    expected = {f"{kind}/{filename}" for kind, files in PUBLIC_FILES.items() for filename in files}
+    directories = dict(PUBLIC_FILES)
+    if manifest.get("runtime_directories", {}).get("fuel") == "fuel":
+        directories["fuel"] = FUEL_PUBLIC_FILES
+    expected = {f"{kind}/{filename}" for kind, files in directories.items() for filename in files}
     payloads = manifest["payloads"]
     actual = {path.relative_to(release).as_posix() for path in release.rglob("*")
               if path.is_file() and path != manifest_file}
     if set(payloads) != expected or actual != expected:
         raise ValueError("Unexpected or missing public release files")
-    if manifest.get("runtime_directories") != {name: name for name in PUBLIC_FILES}:
+    if manifest.get("runtime_directories") != {name: name for name in directories}:
         raise ValueError("Unexpected public runtime directories")
     for relative_name, record in payloads.items():
         path = release / relative_name
         if (path.is_symlink() or path.resolve().parent != (release / relative_name.split("/")[0]).resolve()
                 or path.stat().st_size != record["bytes"] or _sha256(path) != record["sha256"]):
             raise ValueError(f"Public release checksum or path mismatch: {relative_name}")
-    return DashboardConfig(base, {name: release / name for name in OVERRIDES}, pointer["release_id"])
+    return DashboardConfig(base, {name: release / name for name in OVERRIDES}, pointer["release_id"],
+                           release / "fuel" if "fuel" in directories else None)

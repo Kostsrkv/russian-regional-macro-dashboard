@@ -476,7 +476,8 @@ def render_dashboard(data_root: str | Path, fiscal_candidate_root: str | Path | 
                      macro_candidate_root: str | Path | None = None,
                      revenue_candidate_root: str | Path | None = None,
                      annual_candidate_root: str | Path | None = None,
-                     cumulative_candidate_root: str | Path | None = None) -> None:
+                     cumulative_candidate_root: str | Path | None = None,
+                     fuel_candidate_root: str | Path | None = None) -> None:
     """Render the full local Streamlit dashboard."""
 
     import altair as alt
@@ -550,6 +551,16 @@ def render_dashboard(data_root: str | Path, fiscal_candidate_root: str | Path | 
         return
 
     promoted_region_ids = {item["region_id"] for item in regions}
+    fuel_frame, fuel_manifest, fuel_error = None, {}, None
+    if fuel_candidate_root:
+        from macro_rus.fuel_prices import load_fuel_candidate
+        try:
+            fuel_frame, fuel_manifest = load_fuel_candidate(
+                Path(fuel_candidate_root), eligible_region_ids=promoted_region_ids)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            # A failed optional candidate must not replace prices or disable
+            # unrelated, previously reviewed macro/fiscal pages.
+            fuel_error = str(exc)
     if fiscal_candidate_root:
         from macro_rus.fiscal_view import load_candidate
         try:
@@ -589,7 +600,8 @@ def render_dashboard(data_root: str | Path, fiscal_candidate_root: str | Path | 
             ) + (("Spending & financing (preview)", "Social spending (preview)") if fiscal_candidate_root else ())
               + (("Fiscal changes (preview)",) if fiscal_candidate_root and revenue_candidate_root else ())
               + (("Eligible-region overview (optional)",) if fiscal_candidate_root and revenue_candidate_root and cumulative_candidate_root else ())
-              + (("Annual production (preview)",) if annual_candidate_root else ()))
+              + (("Annual production (preview)",) if annual_candidate_root else ())
+              + (("Fuel prices (preview)",) if fuel_candidate_root else ()))
             if selected_region in promoted_region_ids else ("Spending & financing (preview)",),
         )
         st.divider()
@@ -629,8 +641,22 @@ def render_dashboard(data_root: str | Path, fiscal_candidate_root: str | Path | 
     elif page == "Eligible-region overview (optional)":
         from macro_rus.regional_overview import render_regional_overview
         render_regional_overview(st, bundle.get("fiscal_observations"), bundle.tables, bundle.get("industrial_production_cumulative"))
+    elif page == "Fuel prices (preview)":
+        from macro_rus.fuel_view import render_fuel_preview
+        if fuel_error:
+            st.error(f"Fuel candidate unavailable: {fuel_error}. No fallback prices shown.")
+        else:
+            render_fuel_preview(st, alt, fuel_frame, fuel_manifest, selected_region)
     else:
         _render_methodology(st, bundle, selected_region)
+        if fuel_candidate_root:
+            if fuel_error:
+                st.warning(f"Optional fuel candidate unavailable: {fuel_error}")
+            else:
+                from macro_rus.fuel_view import render_fuel_sources
+                from macro_rus.fuel_prices import fuel_history
+                render_fuel_sources(st, fuel_history(fuel_frame, selected_region),
+                                    fuel_manifest, key_prefix="methodology_fuel")
 
 
 def _render_overview(st: Any, alt: Any, bundle: DataBundle, region_id: str) -> None:
