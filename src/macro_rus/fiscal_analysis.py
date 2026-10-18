@@ -354,6 +354,21 @@ def render_fiscal_analysis(st, alt, fiscal: pd.DataFrame, revenue, region_id: st
     if basis == "period_flow":
         st.caption("Q1 equals cumulative Q1; Q2 equals cumulative H1 minus Q1 from the same year. Missing endpoints remain unavailable.")
 
+    # An optional descriptive note reuses the selected period and source-backed
+    # context. The legacy bundle loads fuel separately, so resolve that context
+    # through the same checksummed release/explicit override as the entrypoint.
+    from pathlib import Path
+    from .regional_notes import load_dashboard_note_fuel, render_regional_note
+    fuel, fuel_error = None, None
+    try:
+        fuel = load_dashboard_note_fuel(Path(__file__).resolve().parents[2], fiscal.region_id.unique())
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        fuel_error = str(exc)
+    try:
+        render_regional_note(st, regional, revenue, region_id, period, basis, fuel=fuel, fuel_error=fuel_error)
+    except (ValueError, KeyError, TypeError) as exc:
+        st.warning(f"Regional analytical note unavailable: {exc}. No substitute values shown.")
+
     st.subheader("Change in budget balance")
     bridge, reason = budget_balance_bridge(regional, region_id, period, basis)
     if reason:
@@ -367,7 +382,9 @@ def render_fiscal_analysis(st, alt, fiscal: pd.DataFrame, revenue, region_id: st
         plot["signed_label"] = plot["Amount (RUB bn)"].map(lambda value: f"{value:+.2f}")
         plot["color"] = np.select([plot.role.eq("anchor"), plot.value_rub.ge(0)], ["#677582", "#2455A4"], default="#C66A19")
         chart = alt.Chart(plot).mark_bar().encode(
-            x=alt.X("label:N", sort=plot.label.tolist(), title=None, axis=alt.Axis(labelAngle=0)),
+            x=alt.X("label:N", sort=plot.label.tolist(), title=None,
+                    axis=alt.Axis(labelAngle=0, labelOverlap=False,
+                                  labelExpr="split(datum.label, ' ')", labelLineHeight=14)),
             y=alt.Y("From (RUB bn):Q", title="RUB bn", scale=alt.Scale(zero=True)), y2="To (RUB bn):Q",
             color=alt.Color("color:N", scale=None, legend=None),
             tooltip=["label", alt.Tooltip("Amount (RUB bn):Q", format="+.3f")])
@@ -381,6 +398,9 @@ def render_fiscal_analysis(st, alt, fiscal: pd.DataFrame, revenue, region_id: st
             exact = plot[["label", "Amount (RUB bn)"]].rename(columns={"label": "Item"})
             exact["Amount (RUB bn)"] = exact["Amount (RUB bn)"].map(lambda value: f"{value:+,.3f}")
             st.dataframe(exact, hide_index=True, width="stretch")
+
+    from .fiscal_diagnostics import render_revenue_diagnostics
+    render_revenue_diagnostics(st, alt, regional, revenue, region_id, period, basis)
 
     st.subheader("Spending functions and share changes")
     functions = spending_function_history(regional, basis, region_id)
